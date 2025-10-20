@@ -1,50 +1,167 @@
-# Welcome to your Expo app 👋
+# EduNexus - Peer-to-Peer Tutoring Platform
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A comprehensive React Native mobile application for a peer-to-peer tutoring platform where teachers can upload courses and students can purchase and enroll in them.
 
-## Get started
+## Features
 
-1. Install dependencies
+### 🔐 Authentication System
+- **Login/Signup**: Secure authentication with role-based access
+- **Role Management**: Three user roles (Admin, Teacher, Student)
+- **Session Management**: Persistent login state with AsyncStorage
 
+### 👨‍🎓 Student Features
+- **Browse Courses**: View all available published courses
+- **Course Details**: See course information, teacher details, and ratings
+- **Enrollment**: Enroll in courses with one-click
+- **Progress Tracking**: Track and update learning progress
+- **Enrolled Courses**: View all enrolled courses with progress indicators
+
+### 👨‍🏫 Teacher Features
+- **Course Management**: Create, edit, and manage courses
+- **Course Publishing**: Publish/unpublish courses
+- **Course Analytics**: View enrollment numbers and ratings
+- **Teaching Profile**: Manage teaching credentials and subjects
+
+### 👨‍💼 Admin Features
+- **User Management**: View, activate/deactivate, and delete users
+- **Platform Analytics**: Comprehensive dashboard with platform statistics
+- **Course Oversight**: Monitor all courses and enrollments
+- **System Administration**: Full platform control and settings
+
+### 🎨 Design & UX
+- **Purple Theme**: Consistent purple, black, and white color scheme
+- **Dark/Light Mode**: Automatic theme switching based on system preferences
+- **Modern UI**: Clean, intuitive interface with smooth animations
+- **Responsive Design**: Optimized for various screen sizes
+
+## Tech Stack
+
+- **React Native** with Expo
+- **TypeScript** for type safety
+- **Expo Router** for navigation
+- **AsyncStorage** for local data persistence
+- **React Navigation** for tab navigation
+- **Expo Vector Icons** for icons
+
+## Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd edunexusapp
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the app
-
+3. **Start the development server**
    ```bash
-   npx expo start
+   npm start
    ```
 
-In the output, you'll find options to open the app in a
+4. **Run on device/simulator**
+   ```bash
+   # For iOS
+   npm run ios
+   
+   # For Android
+   npm run android
+   ```
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Demo Credentials
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+For testing purposes, you can use these demo credentials:
 
-## Get a fresh project
+### Admin Access
+- **Email**: admin@demo.com
+- **Password**: any password
+- **Features**: Full platform administration
 
-When you're ready, run:
+### Teacher Access
+- **Email**: teacher@demo.com
+- **Password**: any password
+- **Features**: Course creation and management
 
-```bash
-npm run reset-project
+### Student Access
+- **Email**: student@demo.com
+- **Password**: any password
+- **Features**: Course browsing and enrollment
+
+## Project Structure
+
+```
+app/
+├── (admin)/           # Admin role screens
+│   ├── _layout.tsx    # Admin tab navigation
+│   ├── index.tsx      # Admin dashboard
+│   ├── users.tsx      # User management
+│   └── profile.tsx    # Admin profile
+├── (student)/         # Student role screens
+│   ├── _layout.tsx    # Student tab navigation
+│   ├── index.tsx      # Course browsing
+│   ├── enrolled.tsx   # Enrolled courses
+│   └── profile.tsx    # Student profile
+├── (teacher)/         # Teacher role screens
+│   ├── _layout.tsx    # Teacher tab navigation
+│   ├── index.tsx      # Teacher's courses
+│   ├── create.tsx     # Create course
+│   └── profile.tsx    # Teacher profile
+├── _layout.tsx        # Root layout with auth
+├── index.tsx          # Authentication routing
+├── login.tsx          # Login screen
+└── signup.tsx         # Signup screen
+
+contexts/
+└── AuthContext.tsx    # Authentication context
+
+constants/
+└── Colors.ts          # Theme colors
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## API Integration
 
-## Learn more
+The app is designed to work with the EduNexus backend API. Currently, it uses mock data for demonstration purposes. To connect to the real API:
 
-To learn more about developing your project with Expo, look at the following resources:
+1. Update the API endpoints in the authentication context
+2. Replace mock data with actual API calls
+3. Implement proper error handling and loading states
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Key Features Implementation
 
-## Join the community
+### Authentication Flow
+- Role-based routing after login
+- Persistent session management
+- Secure logout functionality
 
-Join our community of developers creating universal apps.
+### Course Management
+- Comprehensive course creation form
+- Course publishing/unpublishing
+- Enrollment system with progress tracking
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### User Management
+- Search and filter users by role
+- Activate/deactivate user accounts
+- Delete user functionality (admin only)
+
+### Responsive Design
+- Adaptive layouts for different screen sizes
+- Consistent purple theme throughout
+- Smooth navigation transitions
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For support and questions, please contact the development team or create an issue in the repository.
