@@ -2,6 +2,9 @@
 
 A comprehensive React Native mobile application for a peer-to-peer tutoring platform where teachers can upload courses and students can purchase and enroll in them.
 
+## Live release apk
+- **Live**: [Download APK](https://filebin.net/xexsazpbmt57rirv)
+
 ## Features
 
 ### 🔐 Authentication System
@@ -69,26 +72,6 @@ A comprehensive React Native mobile application for a peer-to-peer tutoring plat
    # For Android
    npm run android
    ```
-
-## Demo Credentials
-
-For testing purposes, you can use these demo credentials:
-
-### Admin Access
-- **Email**: admin@demo.com
-- **Password**: any password
-- **Features**: Full platform administration
-
-### Teacher Access
-- **Email**: teacher@demo.com
-- **Password**: any password
-- **Features**: Course creation and management
-
-### Student Access
-- **Email**: student@demo.com
-- **Password**: any password
-- **Features**: Course browsing and enrollment
-
 ## Project Structure
 
 ```
