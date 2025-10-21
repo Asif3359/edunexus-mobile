@@ -152,7 +152,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.footer}>
+        {/* <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.icon }]}>
             Demo Credentials:
           </Text>
@@ -165,7 +165,7 @@ export default function LoginScreen() {
           <Text style={[styles.demoText, { color: colors.icon }]}>
             student@demo.com (Student)
           </Text>
-        </View>
+        </View> */}
       </ScrollView>
     </KeyboardAvoidingView>
   );
