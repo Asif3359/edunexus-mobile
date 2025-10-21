@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -200,7 +201,7 @@ export default function EnrolledCoursesScreen() {
     const courseId = courseData._id || item._id;
 
     return (
-      <View style={[styles.courseCard, { backgroundColor: colors.surface }]}>
+      <TouchableOpacity onPress={() => router.push(`/course/${courseId}`)} style={[styles.courseCard, { backgroundColor: colors.surface }]}>
         <View style={styles.courseHeader}>
           <Text style={[styles.courseTitle, { color: colors.text }]}>
             {title}
@@ -273,7 +274,7 @@ export default function EnrolledCoursesScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 

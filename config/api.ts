@@ -14,12 +14,12 @@ const API_CONFIG = {
 export const getApiBaseUrl = () => {
   // Check if we're in production mode
   if (__DEV__ === false) {
-    return API_CONFIG.PRODUCTION;
+    return API_CONFIG.ANDROID_EMULATOR;
   }
   
   // For development, you can add platform detection logic here
   // For now, we'll use Android emulator as default
-  return API_CONFIG.PRODUCTION;
+  return API_CONFIG.ANDROID_EMULATOR;
 };
 
 export const API_ENDPOINTS = {
