@@ -47,8 +47,28 @@ export default function SignupScreen() {
       return;
     }
 
+      // ✅ Email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        Alert.alert('Invalid Email', 'Please enter a valid email address');
+        return;
+      }
+  
+      // ✅ Password length validation
+      if (password.length < 6) {
+        Alert.alert('Weak Password', 'Password must be at least 6 characters long');
+        return;
+      }
+
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    // ✅ Phone validation (if provided)
+    const phoneRegex = /^(017|013|019|018|015|016|014)\d{8}$/;
+    if (phone && !phoneRegex.test(phone)) {
+      Alert.alert('Invalid Phone', 'Please enter a valid Bangladeshi phone number');
       return;
     }
 

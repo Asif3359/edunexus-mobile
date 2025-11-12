@@ -1,19 +1,24 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     Image,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
 import { Colors } from '../../../constants/Colors';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useColorScheme } from '../../../hooks/useColorScheme';
+import { API_ENDPOINTS, getApiUrl } from '../../../config/api';
 
 interface Material {
   _id: string;
@@ -54,31 +59,143 @@ interface Course {
   createdAt: string;
 }
 
+interface TeacherReview {
+  _id: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  student?: {
+    _id: string;
+    name: string;
+  };
+  course?: {
+    _id: string;
+    title: string;
+  };
+}
+
 const { width } = Dimensions.get('window');
 
 export default function CourseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const courseId = useMemo(() => (Array.isArray(id) ? id[0] : id), [id]);
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [reviews, setReviews] = useState<TeacherReview[]>([]);
+  const [ratingSummary, setRatingSummary] = useState<{ average: number; count: number }>({
+    average: 0,
+    count: 0,
+  });
+  const [studentRating, setStudentRating] = useState(0);
+  const [studentComment, setStudentComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [loadingReviews, setLoadingReviews] = useState(false);
   const { user } = useAuth();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
   useEffect(() => {
-    if (id) {
-      loadCourse();
+    if (courseId) {
+      loadCourse(courseId);
     }
-  }, [id]);
+  }, [courseId]);
 
-  const loadCourse = async () => {
+  const loadTeacherReviews = useCallback(
+    async (teacherId: string, courseIdentifier?: string) => {
+      try {
+        setLoadingReviews(true);
+        const token = await AsyncStorage.getItem('token');
+        const response = await fetch(
+          getApiUrl(API_ENDPOINTS.TEACHER_REVIEWS(teacherId)),
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to load reviews: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const fetchedReviews: TeacherReview[] = Array.isArray(data.reviews)
+          ? data.reviews
+          : Array.isArray(data)
+            ? data
+            : [];
+        setReviews(fetchedReviews);
+        const summary = data.rating ?? {};
+        const nextSummary = {
+          average: summary.average ?? 0,
+          count: summary.count ?? fetchedReviews.length ?? 0,
+        };
+        setRatingSummary(nextSummary);
+        setCourse((prev) =>
+          prev
+            ? {
+                ...prev,
+                rating: {
+                  average:
+                    summary.average ??
+                    prev.rating?.average ??
+                    nextSummary.average,
+                  count:
+                    summary.count ??
+                    fetchedReviews.length ??
+                    prev.rating?.count ??
+                    nextSummary.count,
+                },
+              }
+            : prev
+        );
+
+        if (user?._id) {
+          const existingReview =
+            fetchedReviews.find((review) => {
+              const studentId =
+                review.student?._id ??
+                (typeof review.student === 'string' ? review.student : undefined);
+              return studentId === user._id;
+            }) ?? null;
+
+          if (existingReview) {
+            setStudentRating(existingReview.rating);
+            setStudentComment(existingReview.comment ?? '');
+          } else {
+            setStudentRating(0);
+            setStudentComment('');
+          }
+        }
+      } catch (error) {
+        console.error('Error loading teacher reviews:', error);
+        setReviews([]);
+        setRatingSummary((prev) => ({ ...prev, count: 0, average: 0 }));
+      } finally {
+        setLoadingReviews(false);
+      }
+    },
+    [user?._id]
+  );
+
+  const loadCourse = useCallback(async (courseIdentifier: string) => {
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${id}`);
+      const response = await fetch(
+        getApiUrl(API_ENDPOINTS.COURSE(courseIdentifier))
+      );
       
       if (response.ok) {
         const data = await response.json();
         setCourse(data);
+        if (data?.teacher?._id) {
+          await loadTeacherReviews(data.teacher._id, data._id);
+        } else {
+          setReviews([]);
+          setRatingSummary({ average: 0, count: 0 });
+        }
       } else {
         Alert.alert('Error', 'Failed to load course details');
         router.back();
@@ -152,26 +269,133 @@ export default function CourseScreen() {
         isPublished: true,
         createdAt: '2024-01-15',
       });
+      setReviews([]);
+      setRatingSummary({ average: 4.8, count: 12 });
     } finally {
       setLoading(false);
+      setLoadingReviews(false);
     }
-  };
+  }, [loadTeacherReviews, user?._id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadCourse();
+    if (courseId) {
+      await loadCourse(courseId);
+    }
     setRefreshing(false);
   };
 
   const handleMaterialPress = (material: Material) => {
     try {
       router.push({
-        pathname: '/course/material/[materialId]',
-        params: { id, materialId: material._id }
+        pathname: '/(student)/course/material/[materialId]',
+        params: { id: courseId, materialId: material._id }
       });
     } catch (error) {
       console.error('Navigation error:', error);
       Alert.alert('Error', 'Failed to navigate to material');
+    }
+  };
+
+  const isStudentEnrolled = useMemo(() => {
+    if (!course || !user?._id) {
+      return false;
+    }
+
+    return course.enrolledStudents.some((enrollment) => {
+      const studentValue = (enrollment as any).student;
+      const studentId =
+        typeof studentValue === 'string'
+          ? studentValue
+          : studentValue?._id ?? studentValue?.id;
+      return studentId === user._id;
+    });
+  }, [course, user?._id]);
+
+  const handleRatingSelect = (value: number) => {
+    setStudentRating(value);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!user?._id || !course || !course.teacher?._id) {
+      Alert.alert('Error', 'Missing user or course information.');
+      return;
+    }
+
+    if (!isStudentEnrolled) {
+      Alert.alert('Info', 'You need to be enrolled in this course to leave a review.');
+      return;
+    }
+
+    if (studentRating < 1 || studentRating > 5) {
+      Alert.alert('Error', 'Please select a rating between 1 and 5 stars.');
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      const token = await AsyncStorage.getItem('token');
+
+      const response = await fetch(
+        getApiUrl(API_ENDPOINTS.TEACHER_REVIEWS(course.teacher._id)),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            studentId: user._id,
+            courseId: course._id,
+            rating: studentRating,
+            comment: studentComment.trim(),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to submit review.');
+      }
+
+      const data = await response.json();
+      const updatedReviews: TeacherReview[] = Array.isArray(data.reviews)
+        ? data.reviews
+        : Array.isArray(data)
+          ? data
+          : [];
+      setReviews(updatedReviews);
+      const summary = data.rating ?? {};
+      const nextSummary = {
+        average: summary.average ?? studentRating,
+        count: summary.count ?? updatedReviews.length ?? 0,
+      };
+      setRatingSummary(nextSummary);
+      setCourse((prev) =>
+        prev
+          ? {
+              ...prev,
+              rating: {
+                average:
+                  summary.average ??
+                  prev.rating?.average ??
+                  nextSummary.average,
+                count:
+                  summary.count ??
+                  updatedReviews.length ??
+                  prev.rating?.count ??
+                  nextSummary.count,
+              },
+            }
+          : prev
+      );
+      setStudentComment((prev) => prev.trim());
+      Alert.alert('Success', 'Your review has been submitted successfully.');
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      Alert.alert('Error', (error as Error).message || 'Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -198,6 +422,28 @@ export default function CourseScreen() {
     const mins = minutes % 60;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
+
+  const renderRatingStars = (value: number, size = 18) => (
+    <View style={styles.starRow}>
+      {Array.from({ length: 5 }).map((_, index) => {
+        const starValue = index + 1;
+        const iconName =
+          value >= starValue
+            ? 'star'
+            : value >= starValue - 0.5
+              ? 'star-half'
+              : 'star-outline';
+        return (
+          <Ionicons
+            key={starValue}
+            name={iconName as any}
+            size={size}
+            color={colors.warning}
+          />
+        );
+      })}
+    </View>
+  );
 
   const getStudentProgress = () => {
     if (!user?._id || !course) return 0;
@@ -231,6 +477,9 @@ export default function CourseScreen() {
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: colors.background }]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
       <Stack.Screen options={{ headerShown: true, title: course?.title }} />     
       {/* Course Header */}
@@ -411,6 +660,143 @@ export default function CourseScreen() {
           </View>
         </View>
       </View>
+
+      {/* Reviews Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Student Reviews
+          </Text>
+          <Text style={[styles.sectionSubtitle, { color: colors.secondary }]}>
+            {ratingSummary.count} total
+          </Text>
+        </View>
+
+        <View style={[styles.reviewSummaryCard, { backgroundColor: colors.surface }]}>
+          <View style={styles.reviewSummaryInfo}>
+            <Text style={[styles.reviewAverage, { color: colors.primary }]}>
+              {ratingSummary.average.toFixed(1)}
+            </Text>
+            {renderRatingStars(ratingSummary.average, 20)}
+            <Text style={[styles.reviewCountText, { color: colors.secondary }]}>
+              {ratingSummary.count} review{ratingSummary.count === 1 ? '' : 's'}
+            </Text>
+          </View>
+        </View>
+
+        {loadingReviews ? (
+          <View style={styles.loadingReviews}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.loadingReviewsText, { color: colors.secondary }]}>
+              Loading reviews...
+            </Text>
+          </View>
+        ) : reviews.length === 0 ? (
+          <View style={[styles.noReviewsCard, { backgroundColor: colors.surface }]}>
+            <Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.icon} />
+            <Text style={[styles.noReviewsText, { color: colors.secondary }]}>
+              No reviews yet. Be the first to share your experience with this teacher.
+            </Text>
+          </View>
+        ) : (
+          reviews.slice(0, 5).map((review) => (
+            <View key={review._id} style={[styles.reviewCard, { backgroundColor: colors.surface }]}>
+              <View style={styles.reviewHeaderRow}>
+                <View style={styles.reviewHeaderText}>
+                  <Text style={[styles.reviewerName, { color: colors.text }]}>
+                    {review.student?.name ?? 'Student'}
+                  </Text>
+                  <Text style={[styles.reviewDate, { color: colors.secondary }]}>
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+                {renderRatingStars(review.rating, 16)}
+              </View>
+              {review.comment ? (
+                <Text style={[styles.reviewComment, { color: colors.text }]}>
+                  {review.comment}
+                </Text>
+              ) : null}
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* Leave Review */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+          Leave a Review
+        </Text>
+        {isStudentEnrolled ? (
+          <View style={[styles.leaveReviewCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.leaveReviewLabel, { color: colors.text }]}>
+              Rate your experience with {course.teacher.name}
+            </Text>
+            <View style={styles.ratingSelectRow}>
+              {Array.from({ length: 5 }).map((_, index) => {
+                const starValue = index + 1;
+                const iconName = starValue <= studentRating ? 'star' : 'star-outline';
+                return (
+                  <TouchableOpacity
+                    key={starValue}
+                    activeOpacity={0.8}
+                    onPress={() => handleRatingSelect(starValue)}
+                  >
+                    <Ionicons
+                      name={iconName as any}
+                      size={28}
+                      color={colors.warning}
+                      style={styles.ratingSelectStar}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TextInput
+              style={[
+                styles.commentInput,
+                {
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  borderColor: colors.icon,
+                },
+              ]}
+              placeholder="Share details about the teaching quality, communication, and course experience..."
+              placeholderTextColor={colors.icon}
+              multiline
+              numberOfLines={4}
+              value={studentComment}
+              onChangeText={setStudentComment}
+              maxLength={600}
+            />
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                { backgroundColor: submittingReview ? colors.secondary : colors.primary },
+                submittingReview ? styles.submitButtonDisabled : null,
+              ]}
+              onPress={handleSubmitReview}
+              disabled={submittingReview}
+            >
+              {submittingReview ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Submit Review</Text>
+              )}
+            </TouchableOpacity>
+            <Text style={[styles.updateHint, { color: colors.secondary }]}>
+              You can update your review at any time. Submitting again will replace your previous review.
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.notEnrolledNotice, { backgroundColor: colors.surface }]}>
+            <Ionicons name="lock-closed-outline" size={20} color={colors.icon} />
+            <Text style={[styles.notEnrolledText, { color: colors.secondary }]}>
+              Enroll in this course to leave a review for the teacher.
+            </Text>
+          </View>
+        )}
+      </View>
     </ScrollView>
   );
 }
@@ -477,6 +863,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   description: {
     fontSize: 16,
@@ -566,6 +962,131 @@ const styles = StyleSheet.create({
   },
   instructorRole: {
     fontSize: 14,
+  },
+  starRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reviewSummaryCard: {
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  reviewSummaryInfo: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  reviewAverage: {
+    fontSize: 36,
+    fontWeight: '700',
+  },
+  reviewCountText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingReviews: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingReviewsText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  noReviewsCard: {
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    gap: 12,
+  },
+  noReviewsText: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  reviewCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  reviewHeaderText: {
+    flex: 1,
+    gap: 4,
+  },
+  reviewerName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  reviewDate: {
+    fontSize: 12,
+  },
+  reviewComment: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  leaveReviewCard: {
+    padding: 20,
+    borderRadius: 12,
+    gap: 16,
+  },
+  leaveReviewLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  ratingSelectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  ratingSelectStar: {
+    marginHorizontal: 2,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  submitButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.8,
+  },
+  submitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  updateHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  notEnrolledNotice: {
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  notEnrolledText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
   },
   loadingText: {
     marginTop: 16,

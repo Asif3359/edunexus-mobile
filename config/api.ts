@@ -7,19 +7,23 @@ const API_CONFIG = {
   // For physical device (replace with your computer's IP address)
   PHYSICAL_DEVICE: 'http://192.168.0.115:3000', // Your computer's IP address
   // For production - use environment variable or fallback
-  PRODUCTION: 'https://edunexusbackend.onrender.com',
-};
+  PRODUCTION: 'https://edunexusbackend-mntx.onrender.com',
+} as const;
 
 // Detect the platform and return appropriate base URL
 export const getApiBaseUrl = () => {
-  // Check if we're in production mode
-  if (__DEV__ === false) {
-    return API_CONFIG.ANDROID_EMULATOR;
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.length > 0) {
+    return API_CONFIG.PRODUCTION;
   }
-  
+
+  if (__DEV__ === false) {
+    return API_CONFIG.PRODUCTION;
+  }
+
   // For development, you can add platform detection logic here
   // For now, we'll use Android emulator as default
-  return API_CONFIG.ANDROID_EMULATOR;
+  return API_CONFIG.PRODUCTION;
 };
 
 export const API_ENDPOINTS = {
@@ -29,8 +33,17 @@ export const API_ENDPOINTS = {
   PROFILE: '/api/auth/profile',
   USERS: '/api/users',
   COURSES: '/api/courses',
-  COURSE_MATERIALS: '/api/courses/:id/materials',
-};
+  COURSE: (courseId: string) => `/api/courses/${courseId}`,
+  COURSE_PUBLISH: (courseId: string) => `/api/courses/${courseId}/publish`,
+  COURSE_MATERIALS: (courseId: string) => `/api/courses/${courseId}/materials`,
+  COURSE_MATERIAL: (courseId: string, materialId: string) =>
+    `/api/courses/${courseId}/materials/${materialId}`,
+  TEACHER_COURSES: (teacherId: string) => `/api/courses/teacher/${teacherId}`,
+  TEACHER_STATS: (teacherId: string) => `/api/teachers/${teacherId}/stats`,
+  TEACHER_REVIEWS: (teacherId: string) => `/api/teachers/${teacherId}/reviews`,
+  TEACHER_REVIEW: (teacherId: string, reviewId?: string) =>
+    `/api/teachers/${teacherId}/reviews${reviewId ? `/${reviewId}` : ''}`,
+} as const;
 
 export const getApiUrl = (endpoint: string) => {
   return `${getApiBaseUrl()}${endpoint}`;

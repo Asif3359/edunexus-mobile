@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -10,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { API_ENDPOINTS, getApiUrl } from '../../../config/api';
 import { Colors } from '../../../constants/Colors';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useColorScheme } from '../../../hooks/useColorScheme';
@@ -38,78 +40,46 @@ export default function TeacherCoursesScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
-  useEffect(() => {
-    loadCourses();
-  }, []);
+  const loadCourses = useCallback(async () => {
+    if (!user?._id) {
+      return;
+    }
 
-  const loadCourses = async () => {
     try {
       setLoading(true);
-      // Mock API call - replace with actual API endpoint
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/teacher/${user?._id}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        // The API returns courses directly as an array, not wrapped in a 'courses' property
-        setCourses(Array.isArray(data) ? data : data.courses || []);
-      } else {
-        setCourses([]);
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(
+        getApiUrl(API_ENDPOINTS.TEACHER_COURSES(user._id)),
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch courses: ${response.status}`);
       }
+
+      const data = await response.json();
+      const normalizedCourses = Array.isArray(data) ? data : data.courses || [];
+      setCourses(normalizedCourses);
     } catch (error) {
       console.error('Error loading courses:', error);
+      Alert.alert(
+        'Error',
+        'Unable to load your courses right now. Please pull to refresh or try again later.'
+      );
       setCourses([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?._id]);
 
-  const getMockTeacherCourses = (): TeacherCourse[] => [
-    {
-      _id: '1',
-      title: 'Advanced Mathematics',
-      description: 'Comprehensive course on advanced mathematics including calculus, linear algebra, and differential equations.',
-      subject: 'Mathematics',
-      level: 'Advanced',
-      price: 99.99,
-      duration: 20,
-      rating: { average: 4.8, count: 12 },
-      enrolledStudents: 45,
-      maxStudents: 50,
-      isPublished: true,
-      isActive: true,
-      createdAt: '2024-01-15',
-    },
-    {
-      _id: '2',
-      title: 'Physics Fundamentals',
-      description: 'Learn the fundamental principles of physics including mechanics, thermodynamics, and electromagnetism.',
-      subject: 'Physics',
-      level: 'Intermediate',
-      price: 79.99,
-      duration: 16,
-      rating: { average: 4.6, count: 8 },
-      enrolledStudents: 32,
-      maxStudents: 40,
-      isPublished: true,
-      isActive: true,
-      createdAt: '2024-02-01',
-    },
-    {
-      _id: '3',
-      title: 'Draft Course - Chemistry Basics',
-      description: 'Introduction to chemistry concepts and laboratory techniques.',
-      subject: 'Chemistry',
-      level: 'Beginner',
-      price: 59.99,
-      duration: 12,
-      rating: { average: 0, count: 0 },
-      enrolledStudents: 0,
-      maxStudents: 30,
-      isPublished: false,
-      isActive: true,
-      createdAt: '2024-02-15',
-    },
-  ];
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -119,39 +89,36 @@ export default function TeacherCoursesScreen() {
 
   const handleTogglePublish = async (courseId: string, isPublished: boolean) => {
     try {
-      // Mock API call - replace with actual API endpoint
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${courseId}/publish`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          teacherId: user?._id,
-          isPublished: !isPublished,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert(
-          'Success', 
-          `Course ${!isPublished ? 'published' : 'unpublished'} successfully!`
-        );
-        loadCourses(); // Refresh the list
-      } else {
-        Alert.alert('Error', 'Failed to update course status. Please try again.');
-      }
-    } catch (error) {
-      Alert.alert(
-        'Success', 
-        `Course ${!isPublished ? 'published' : 'unpublished'} successfully! (Demo)`
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(
+        getApiUrl(API_ENDPOINTS.COURSE_PUBLISH(courseId)),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            teacherId: user?._id,
+            isPublished: !isPublished,
+          }),
+        }
       );
-      // Update local state for demo
-      setCourses(prev => 
-        prev.map(course => 
-          course._id === courseId 
-            ? { ...course, isPublished: !isPublished }
-            : course
-        )
+
+      if (!response.ok) {
+        throw new Error(`Failed to update course status: ${response.status}`);
+      }
+
+      Alert.alert(
+        'Success',
+        `Course ${!isPublished ? 'published' : 'unpublished'} successfully!`
+      );
+      loadCourses();
+    } catch (error) {
+      console.error('Error updating course status:', error);
+      Alert.alert(
+        'Error',
+        'Failed to update course status. Please try again in a moment.'
       );
     }
   };
@@ -170,21 +137,34 @@ export default function TeacherCoursesScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Mock API call - replace with actual API endpoint
-              const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${courseId}`, {
-                method: 'DELETE',
-              });
-
-              if (response.ok) {
-                Alert.alert('Success', 'Course deleted successfully!');
-                loadCourses(); // Refresh the list
-              } else {
-                Alert.alert('Error', 'Failed to delete course. Please try again.');
+              const token = await AsyncStorage.getItem('token');
+              const response = await fetch(
+                getApiUrl(API_ENDPOINTS.COURSE(courseId)),
+                {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                }
+              );
+  
+              const responseData = await response.json();
+  
+              // Check for both HTTP error status and backend error message
+              if (!response.ok || responseData.error) {
+                const errorMessage = responseData.message || responseData.error || `Failed to delete course: ${response.status}`;
+                throw new Error(errorMessage);
               }
+  
+              Alert.alert('Success', 'Course deleted successfully!');
+              loadCourses();
             } catch (error) {
-              Alert.alert('Success', 'Course deleted successfully! (Demo)');
-              // Update local state for demo
-              setCourses(prev => prev.filter(course => course._id !== courseId));
+              console.error('Error deleting course:', error);
+              Alert.alert(
+                'Error',
+                (error as Error).message || 'Failed to delete course. Please try again in a moment.'
+              );
             }
           },
         },
@@ -192,10 +172,23 @@ export default function TeacherCoursesScreen() {
     );
   };
 
-  const renderCourse = ({ item }: { item: TeacherCourse }) => (
+  const renderCourse = ({ item }: { item: TeacherCourse }) => {
+    const ratingValue =
+      typeof item.rating === 'object' ? item.rating.average : item.rating;
+    const formattedRating =
+      typeof ratingValue === 'number' ? ratingValue.toFixed(1) : ratingValue;
+    const ratingCount =
+      typeof item.rating === 'object' ? item.rating.count : null;
+
+    return (
     <TouchableOpacity 
       style={[styles.courseCard, { backgroundColor: colors.surface }]}
-      onPress={() => router.push(`/course/${item._id}`)}
+      onPress={() =>
+        router.push({
+          pathname: '/(teacher)/course/[id]',
+          params: { id: item._id },
+        })
+      }
     >
       <View style={styles.courseHeader}>
         <View style={styles.courseTitleContainer}>
@@ -209,8 +202,13 @@ export default function TeacherCoursesScreen() {
         <View style={styles.ratingContainer}>
           <Ionicons name="star" size={16} color={colors.warning} />
           <Text style={[styles.rating, { color: colors.text }]}>
-            {typeof item.rating === 'object' ? item.rating.average : item.rating}
+            {formattedRating}
           </Text>
+          {typeof ratingCount === 'number' && (
+            <Text style={[styles.ratingCount, { color: colors.icon }]}>
+              ({ratingCount})
+            </Text>
+          )}
           <Ionicons name="chevron-forward" size={16} color={colors.icon} style={{ marginLeft: 8 }} />
         </View>
       </View>
@@ -268,7 +266,8 @@ export default function TeacherCoursesScreen() {
         </View>
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -366,6 +365,11 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 14,
     fontWeight: '600',
+  },
+  ratingCount: {
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: '500',
   },
   courseDescription: {
     fontSize: 14,

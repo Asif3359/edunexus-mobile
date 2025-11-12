@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { API_ENDPOINTS, getApiUrl } from '../config/api';
 
 export interface User {
@@ -77,53 +78,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      
-      // Mock API call - replace with actual API endpoint
-      const response = await fetch(getApiUrl(API_ENDPOINTS.LOGIN), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+const login = async (email: string, password: string): Promise<boolean> => {
+  try {
+    setIsLoading(true);
+    
+    const response = await fetch(getApiUrl(API_ENDPOINTS.LOGIN), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        const userData = data.user;
-        
-        setUser(userData);
-        await AsyncStorage.setItem('user', JSON.stringify(userData));
-        // Only store token if it exists
-        if (data.token) {
-          await AsyncStorage.setItem('token', data.token);
-        }
-        return true;
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+    if (response.ok) {
+      const data = await response.json();
+      const userData = data.user;
+
+      setUser(userData);
+      await AsyncStorage.setItem('user', JSON.stringify(userData));
+
+      // ✅ Only store token if backend sends one
+      if (data.token) {
+        await AsyncStorage.setItem('token', data.token);
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      // For demo purposes, create a mock user
-      const mockUser: User = {
-        _id: '1',
-        name: 'Demo User',
-        email: email,
-        role: email.includes('admin') ? 'admin' : email.includes('teacher') ? 'teacher' : 'student',
-        isActive: true,
-        isVerified: true,
-      };
-      
-      setUser(mockUser);
-      await AsyncStorage.setItem('user', JSON.stringify(mockUser));
+
       return true;
-    } finally {
-      setIsLoading(false);
+    } else {
+      const errorData = await response.json();
+      return false; // ❌ Prevent navigation
     }
-  };
+  } catch (error) {
+    console.error('Login error:', error);
+    Alert.alert('Error', 'Something went wrong. Please try again.');
+    return false; // ❌ Prevent navigation
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const register = async (userData: RegisterData): Promise<boolean> => {
     try {

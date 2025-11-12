@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -15,6 +16,7 @@ import {
 import { Colors } from '../../../constants/Colors';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useColorScheme } from '../../../hooks/useColorScheme';
+import { API_ENDPOINTS, getApiUrl } from '../../../config/api';
 
 interface CourseMaterial {
   _id?: string;
@@ -49,6 +51,7 @@ export default function CourseManagementScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMaterialIndex, setEditingMaterialIndex] = useState<number | null>(null);
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
   const [newMaterial, setNewMaterial] = useState<CourseMaterial>({
     title: '',
     type: 'video',
@@ -60,64 +63,42 @@ export default function CourseManagementScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 
-  useEffect(() => {
-    if (id) {
-      loadCourse();
+  const loadCourse = useCallback(async () => {
+    if (!id) {
+      return;
     }
-  }, [id]);
 
-  const loadCourse = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${id}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCourse(data);
-      } else {
-        Alert.alert('Error', 'Failed to load course details');
-        router.back();
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(
+        getApiUrl(API_ENDPOINTS.COURSE(id)),
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to load course: ${response.status}`);
       }
+
+      const data = await response.json();
+      setCourse(data.course ?? data);
     } catch (error) {
       console.error('Error loading course:', error);
-      // For demo purposes, create a mock course
-      setCourse({
-        _id: id,
-        title: 'Advanced Mathematics',
-        description: 'Comprehensive course on advanced mathematics including calculus, linear algebra, and differential equations.',
-        subject: 'Mathematics',
-        level: 'Advanced',
-        price: 99.99,
-        duration: 20,
-        rating: { average: 4.8, count: 12 },
-        enrolledStudents: 45,
-        maxStudents: 50,
-        isPublished: true,
-        isActive: true,
-        materials: [
-          {
-            _id: '1',
-            title: 'Introduction to Calculus',
-            type: 'video',
-            url: 'https://example.com/video1',
-            description: 'Basic concepts of calculus',
-            duration: 45,
-          },
-          {
-            _id: '2',
-            title: 'Calculus Practice Problems',
-            type: 'document',
-            url: 'https://example.com/pdf1',
-            description: 'Practice problems for calculus',
-            duration: 30,
-          },
-        ],
-        createdAt: '2024-01-15',
-      });
+      Alert.alert('Error', 'Failed to load course details.');
+      router.back();
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    loadCourse();
+  }, [loadCourse]);
 
   const handleAddMaterial = async () => {
     if (!newMaterial.title || !newMaterial.url) {
@@ -126,85 +107,86 @@ export default function CourseManagementScreen() {
     }
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${id}/materials`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          teacherId: user?._id,
-          materials: [newMaterial],
-        }),
-      });
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(
+        getApiUrl(API_ENDPOINTS.COURSE_MATERIALS(id!)),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            teacherId: user?._id,
+            materials: [newMaterial],
+          }),
+        }
+      );
 
-      if (response.ok) {
-        const data = await response.json();
-        setCourse(data.course);
-        setShowAddModal(false);
-        setNewMaterial({ title: '', type: 'video', url: '', description: '', duration: 0 });
-        Alert.alert('Success', 'Material added successfully!');
-      } else {
-        Alert.alert('Error', 'Failed to add material');
+      if (!response.ok) {
+        throw new Error(`Failed to add material: ${response.status}`);
       }
+
+      const data = await response.json();
+      setCourse(data.course ?? data);
+      setShowAddModal(false);
+      setNewMaterial({ title: '', type: 'video', url: '', description: '', duration: 0 });
+      Alert.alert('Success', 'Material added successfully!');
     } catch (error) {
-      // For demo purposes, update local state
-      if (course) {
-        const updatedCourse = {
-          ...course,
-          materials: [...course.materials, { ...newMaterial, _id: Date.now().toString() }],
-        };
-        setCourse(updatedCourse);
-        setShowAddModal(false);
-        setNewMaterial({ title: '', type: 'video', url: '', description: '', duration: 0 });
-        Alert.alert('Success', 'Material added successfully! (Demo)');
-      }
+      console.error('Error adding material:', error);
+      Alert.alert('Error', 'Failed to add material. Please try again.');
     }
   };
 
   const handleEditMaterial = async () => {
-    if (!newMaterial.title || !newMaterial.url || editingMaterialIndex === null) {
+    if (!newMaterial.title || !newMaterial.url || (!editingMaterialId && editingMaterialIndex === null)) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
     try {
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${id}/materials/${editingMaterialIndex}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          teacherId: user?._id,
-          ...newMaterial,
-        }),
-      });
+      const token = await AsyncStorage.getItem('token');
+      const targetMaterialId =
+        editingMaterialId ??
+        (editingMaterialIndex !== null ? editingMaterialIndex.toString() : null);
 
-      if (response.ok) {
-        const data = await response.json();
-        setCourse(data.course);
-        setShowEditModal(false);
-        setEditingMaterialIndex(null);
-        setNewMaterial({ title: '', type: 'video', url: '', description: '', duration: 0 });
-        Alert.alert('Success', 'Material updated successfully!');
-      } else {
-        Alert.alert('Error', 'Failed to update material');
+      const response = await fetch(
+        getApiUrl(
+          editingMaterialId && id
+            ? API_ENDPOINTS.COURSE_MATERIAL(id, editingMaterialId)
+            : `${API_ENDPOINTS.COURSE_MATERIALS(id!)}${targetMaterialId ? `/${targetMaterialId}` : ''}`
+        ),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            teacherId: user?._id,
+            ...newMaterial,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to update material: ${response.status}`);
       }
+
+      const data = await response.json();
+      setCourse(data.course ?? data);
+      setShowEditModal(false);
+      setEditingMaterialId(null);
+      setEditingMaterialIndex(null);
+      setNewMaterial({ title: '', type: 'video', url: '', description: '', duration: 0 });
+      Alert.alert('Success', 'Material updated successfully!');
     } catch (error) {
-      // For demo purposes, update local state
-      if (course && editingMaterialIndex !== null) {
-        const updatedMaterials = [...course.materials];
-        updatedMaterials[editingMaterialIndex] = { ...newMaterial, _id: updatedMaterials[editingMaterialIndex]._id };
-        const updatedCourse = { ...course, materials: updatedMaterials };
-        setCourse(updatedCourse);
-        setShowEditModal(false);
-        setEditingMaterialIndex(null);
-        setNewMaterial({ title: '', type: 'video', url: '', description: '', duration: 0 });
-        Alert.alert('Success', 'Material updated successfully! (Demo)');
-      }
+      console.error('Error updating material:', error);
+      Alert.alert('Error', 'Failed to update material. Please try again.');
     }
   };
 
-  const handleDeleteMaterial = async (materialIndex: number) => {
+  const handleDeleteMaterial = async (materialId: string | undefined, materialIndex: number) => {
     Alert.alert(
       'Delete Material',
       'Are you sure you want to delete this material?',
@@ -215,31 +197,36 @@ export default function CourseManagementScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/courses/${id}/materials/${materialIndex}`, {
-                method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  teacherId: user?._id,
-                }),
-              });
+              const token = await AsyncStorage.getItem('token');
+              const targetMaterialId = materialId ?? materialIndex.toString();
+              const response = await fetch(
+                getApiUrl(
+                  materialId && id
+                    ? API_ENDPOINTS.COURSE_MATERIAL(id, targetMaterialId)
+                    : `${API_ENDPOINTS.COURSE_MATERIALS(id!)}${targetMaterialId ? `/${targetMaterialId}` : ''}`
+                ),
+                {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    teacherId: user?._id,
+                  }),
+                }
+              );
 
-              if (response.ok) {
-                const data = await response.json();
-                setCourse(data.course);
-                Alert.alert('Success', 'Material deleted successfully!');
-              } else {
-                Alert.alert('Error', 'Failed to delete material');
+              if (!response.ok) {
+                throw new Error(`Failed to delete material: ${response.status}`);
               }
+
+              const data = await response.json();
+              setCourse(data.course ?? data);
+              Alert.alert('Success', 'Material deleted successfully!');
             } catch (error) {
-              // For demo purposes, update local state
-              if (course) {
-                const updatedMaterials = course.materials.filter((_, index) => index !== materialIndex);
-                const updatedCourse = { ...course, materials: updatedMaterials };
-                setCourse(updatedCourse);
-                Alert.alert('Success', 'Material deleted successfully! (Demo)');
-              }
+              console.error('Error deleting material:', error);
+              Alert.alert('Error', 'Failed to delete material. Please try again.');
             }
           },
         },
@@ -250,6 +237,7 @@ export default function CourseManagementScreen() {
   const openEditModal = (material: CourseMaterial, index: number) => {
     setNewMaterial(material);
     setEditingMaterialIndex(index);
+    setEditingMaterialId(material._id ?? null);
     setShowEditModal(true);
   };
 
@@ -312,7 +300,7 @@ export default function CourseManagementScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, { backgroundColor: colors.error }]}
-            onPress={() => handleDeleteMaterial(index)}
+            onPress={() => handleDeleteMaterial(item._id, index)}
           >
             <Ionicons name="trash" size={16} color="white" />
           </TouchableOpacity>

@@ -42,11 +42,24 @@ export default function LoginScreen() {
       return;
     }
 
+    // ✅ Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      return;
+    }
+
+    // ✅ Password length validation
+    if (password.length < 6) {
+      Alert.alert('Weak Password', 'Password must be at least 6 characters long');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const success = await login(email, password);
       if (!success) {
-        Alert.alert('Error', 'Login failed. Please try again.');
+        Alert.alert('Error', 'Invalid credentials');
       }
     } catch (error) {
       Alert.alert('Error', 'Login failed. Please try again.');
@@ -54,6 +67,7 @@ export default function LoginScreen() {
       setIsLoading(false);
     }
   };
+
 
   const navigateToSignup = () => {
     router.push('/signup');

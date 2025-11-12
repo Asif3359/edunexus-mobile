@@ -10,7 +10,7 @@ A comprehensive React Native mobile application for a peer-to-peer tutoring plat
 ### 🔐 Authentication System
 - **Login/Signup**: Secure authentication with role-based access
 - **Role Management**: Three user roles (Admin, Teacher, Student)
-- **Session Management**: Persistent login state with AsyncStorage
+- **Session Management**: Persistent() login state with AsyncStorage
 
 ### 👨‍🎓 Student Features
 - **Browse Courses**: View all available published courses

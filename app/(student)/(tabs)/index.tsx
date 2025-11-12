@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { API_ENDPOINTS, getApiUrl } from "../../../config/api";
 import { Colors } from "../../../constants/Colors";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useColorScheme } from "../../../hooks/useColorScheme";
@@ -35,6 +36,7 @@ interface Course {
   maxStudents: number;
   isPublished: boolean;
   tags?: string[];
+  
 }
 
 interface SearchFilters {
@@ -126,7 +128,7 @@ export default function StudentCoursesScreen() {
       params.append('limit', '10');
 
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/courses/search/advanced?${params.toString()}`
+        `${getApiUrl(API_ENDPOINTS.COURSES)}/search/advanced?${params.toString()}`
       );
 
       if (response.ok) {
@@ -147,7 +149,7 @@ export default function StudentCoursesScreen() {
   const loadSuggestions = useCallback(async () => {
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/courses/search/suggestions?q=${encodeURIComponent(searchQuery)}&limit=5`
+        `${getApiUrl(API_ENDPOINTS.COURSES)}/search/suggestions?q=${encodeURIComponent(searchQuery)}&limit=5`
       );
       
       if (response.ok) {
@@ -182,7 +184,7 @@ export default function StudentCoursesScreen() {
   const loadPopularTags = async () => {
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/courses/tags/popular?limit=10`
+        `${getApiUrl(API_ENDPOINTS.COURSES)}/tags/popular?limit=10`
       );
       
       if (response.ok) {
@@ -197,7 +199,7 @@ export default function StudentCoursesScreen() {
   const loadAllTags = async () => {
     try {
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/courses/tags/all`
+        `${getApiUrl(API_ENDPOINTS.COURSES)}/tags/all`
       );
       
       if (response.ok) {
@@ -350,7 +352,7 @@ export default function StudentCoursesScreen() {
 
       // Mock API call - replace with actual API endpoint
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/courses/${courseId}/enroll`,
+        getApiUrl(`${API_ENDPOINTS.COURSES}/${courseId}/enroll`),
         {
           method: "POST",
           headers,
@@ -402,6 +404,22 @@ export default function StudentCoursesScreen() {
       return studentId === user?._id;
     });
 
+    const ratingData = item.rating;
+    const ratingAverage =
+      typeof ratingData === 'number'
+        ? ratingData
+        : typeof ratingData === 'object' && ratingData !== null
+        ? ratingData.average
+        : 0;
+    const ratingCount =
+      typeof ratingData === 'object' && ratingData !== null
+        ? ratingData.count
+        : undefined;
+    const formattedRating =
+      typeof ratingAverage === 'number' && !Number.isNaN(ratingAverage)
+        ? ratingAverage.toFixed(1)
+        : '0.0';
+
     return (
       <TouchableOpacity
         style={[styles.courseCard, { backgroundColor: colors.surface }]}
@@ -414,10 +432,13 @@ export default function StudentCoursesScreen() {
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={16} color={colors.warning} />
             <Text style={[styles.rating, { color: colors.text }]}>
-              {typeof item.rating === "object"
-                ? item.rating.average
-                : item.rating}
+              {formattedRating}
             </Text>
+            {typeof ratingCount === 'number' && (
+              <Text style={[styles.ratingCount, { color: colors.icon }]}>
+                ({ratingCount})
+              </Text>
+            )}
           </View>
         </View>
 
@@ -872,6 +893,11 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 14,
     fontWeight: "600",
+  },
+  ratingCount: {
+    marginLeft: 4,
+    fontSize: 12,
+    fontWeight: "500",
   },
   courseDescription: {
     fontSize: 14,
