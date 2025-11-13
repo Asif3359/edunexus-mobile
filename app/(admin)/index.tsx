@@ -1,6 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   RefreshControl,
@@ -10,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { API_ENDPOINTS, getApiUrl } from '../../config/api';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from '../../hooks/useColorScheme';
 
@@ -57,18 +61,52 @@ export default function AdminDashboardScreen() {
     completedCourses: 22,
   });
 
+  const formatRevenue = useCallback((value: number) => {
+    if (!Number.isFinite(value) || value <= 0) {
+      return '$0';
+    }
+
+    if (value >= 1_000_000) {
+      return `$${(value / 1_000_000).toFixed(1)}M`;
+    }
+
+    if (value >= 1_000) {
+      return `$${(value / 1_000).toFixed(1)}K`;
+    }
+
+    return `$${value.toLocaleString()}`;
+  }, []);
+
   const loadStats = useCallback(async () => {
     try {
       setLoading(true);
-      // Mock API call - replace with actual API endpoint
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/admin/stats`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data.stats || getMockStats());
-      } else {
-        setStats(getMockStats());
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(getApiUrl(API_ENDPOINTS.ADMIN_STATS), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch admin stats: ${response.status}`);
       }
+
+      const data = await response.json();
+      const statsPayload = data.stats ?? data;
+
+      setStats({
+        totalUsers: statsPayload.totalUsers ?? statsPayload.userCount ?? 0,
+        totalTeachers: statsPayload.totalTeachers ?? statsPayload.teacherCount ?? 0,
+        totalStudents: statsPayload.totalStudents ?? statsPayload.studentCount ?? 0,
+        totalCourses: statsPayload.totalCourses ?? statsPayload.courseCount ?? 0,
+        totalEnrollments:
+          statsPayload.totalEnrollments ?? statsPayload.enrollmentCount ?? 0,
+        totalRevenue: statsPayload.totalRevenue ?? statsPayload.revenue ?? 0,
+        activeCourses: statsPayload.activeCourses ?? statsPayload.activeCount ?? 0,
+        completedCourses:
+          statsPayload.completedCourses ?? statsPayload.completedCount ?? 0,
+      });
     } catch (error) {
       console.error('Error loading stats:', error);
       setStats(getMockStats());
@@ -99,6 +137,11 @@ export default function AdminDashboardScreen() {
     await loadStats();
     setRefreshing(false);
   };
+
+  const formattedRevenue = useMemo(
+    () => (loading ? '—' : formatRevenue(stats.totalRevenue)),
+    [formatRevenue, loading, stats.totalRevenue]
+  );
 
   const StatCard = ({ 
     title, 
@@ -186,13 +229,13 @@ export default function AdminDashboardScreen() {
         <View style={styles.statsGrid}>
           <StatCard
             title="Total Users"
-            value={stats.totalUsers.toLocaleString()}
+            value={loading ? '—' : stats.totalUsers.toLocaleString()}
             icon="people"
             color="#6366F1"
           />
           <StatCard
             title="Total Teachers"
-            value={stats.totalTeachers}
+            value={loading ? '—' : stats.totalTeachers.toLocaleString()}
             icon="school"
             color="#10B981"
           />
@@ -200,13 +243,13 @@ export default function AdminDashboardScreen() {
         <View style={styles.statsGrid}>
           <StatCard
             title="Total Students"
-            value={stats.totalStudents.toLocaleString()}
+            value={loading ? '—' : stats.totalStudents.toLocaleString()}
             icon="person"
             color="#F59E0B"
           />
           <StatCard
             title="Total Courses"
-            value={stats.totalCourses}
+            value={loading ? '—' : stats.totalCourses.toLocaleString()}
             icon="library"
             color="#EF4444"
           />
@@ -226,13 +269,13 @@ export default function AdminDashboardScreen() {
         <View style={styles.statsGrid}>
           <StatCard
             title="Total Enrollments"
-            value={stats.totalEnrollments.toLocaleString()}
+            value={loading ? '—' : stats.totalEnrollments.toLocaleString()}
             icon="book"
             color="#8B5CF6"
           />
           <StatCard
             title="Active Courses"
-            value={stats.activeCourses}
+            value={loading ? '—' : stats.activeCourses.toLocaleString()}
             icon="play-circle"
             color="#06B6D4"
           />
@@ -240,13 +283,13 @@ export default function AdminDashboardScreen() {
         <View style={styles.statsGrid}>
           <StatCard
             title="Completed Courses"
-            value={stats.completedCourses}
+            value={loading ? '—' : stats.completedCourses.toLocaleString()}
             icon="checkmark-circle"
             color="#84CC16"
           />
           <StatCard
             title="Total Revenue"
-            value={`$${stats.totalRevenue.toLocaleString()}`}
+            value={formattedRevenue}
             icon="cash"
             color="#F97316"
           />
@@ -267,7 +310,7 @@ export default function AdminDashboardScreen() {
         <View style={styles.actionGrid}>
           <TouchableOpacity 
             style={[styles.actionCard, { backgroundColor: colors.surface }]}
-            onPress={() => {/* Navigate to users */}}
+            onPress={() => {router.push('/(admin)/users')}}
             activeOpacity={0.7}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#6366F1' }]}>
@@ -281,7 +324,7 @@ export default function AdminDashboardScreen() {
 
           <TouchableOpacity 
             style={[styles.actionCard, { backgroundColor: colors.surface }]}
-            onPress={() => {/* Navigate to courses */}}
+            onPress={() => { Alert.alert('Info', 'Course management coming soon!')}}
             activeOpacity={0.7}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#10B981' }]}>
@@ -295,7 +338,7 @@ export default function AdminDashboardScreen() {
 
           <TouchableOpacity 
             style={[styles.actionCard, { backgroundColor: colors.surface }]}
-            onPress={() => {/* Navigate to analytics */}}
+            onPress={() => { Alert.alert('Info', 'Analytics coming soon!')}}
             activeOpacity={0.7}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#F59E0B' }]}>
@@ -309,7 +352,7 @@ export default function AdminDashboardScreen() {
 
           <TouchableOpacity 
             style={[styles.actionCard, { backgroundColor: colors.surface }]}
-            onPress={() => {/* Navigate to settings */}}
+            onPress={() => { Alert.alert('Info', 'System settings coming soon!')}}
             activeOpacity={0.7}
           >
             <View style={[styles.actionIconContainer, { backgroundColor: '#EF4444' }]}>

@@ -117,6 +117,55 @@ This document highlights the newly added teacher review feature and related endp
   - `403 Forbidden` if the student is not of role `student` or not enrolled in the course.
   - `404 Not Found` if the teacher or course does not exist or they do not match.
 
+## Courses With Ratings
+
+- **Endpoint**: `GET /api/courses`
+- **Description**: Returns a paginated list of all published and active courses. Each course document already contains its rating summary directly on the `rating` property (average and review count).
+- **Query Parameters** (optional):
+  - `subject`, `level`, `teacherId`, `minPrice`, `maxPrice` – filters for courses.
+  - `search` – full-text search keyword.
+  - `page`, `limit` – pagination controls (defaults: `page=1`, `limit=10`).
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "courses": [
+      {
+        "_id": "657e9b...",
+        "title": "Algebra Foundations",
+        "description": "...",
+        "teacher": {
+          "_id": "657d4f...",
+          "name": "Jane Doe",
+          "email": "jane@example.com",
+          "profileImage": "https://...",
+          "bio": "...",
+          "subjects": ["Mathematics"],
+          "experience": 5
+        },
+        "price": 199,
+        "duration": 30,
+        "rating": {
+          "average": 4.5,
+          "count": 12
+        },
+        "tags": ["math", "algebra"],
+        "isPublished": true,
+        "isActive": true
+        // ... other course fields ...
+      }
+    ],
+    "pagination": {
+      "current": 1,
+      "total": 4,
+      "hasNext": true,
+      "hasPrev": false
+    }
+  }
+  ```
+- **Notes**:
+  - Other course endpoints in `routes/courses.js` (e.g. `GET /api/courses/:id`, `/api/courses/search/*`, `/api/courses/student/:studentId`) also return the `rating` object for each course.
+  - The rating structure mirrors the schema: `rating.average` (0–5) and `rating.count` (number of reviews). Update logic lives in `course.addReview`.
+
 ## Notes
 
 - All teacher review data persists on the `User` model inside `teacherReviews` and `teacherRating`.

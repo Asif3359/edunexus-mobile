@@ -1,21 +1,113 @@
-import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ScrollView,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { API_ENDPOINTS, getApiUrl } from '../../config/api';
 import { Colors } from '../../constants/Colors';
-import { useColorScheme } from '../../hooks/useColorScheme';
 import { useAuth } from '../../contexts/AuthContext';
+import { useColorScheme } from '../../hooks/useColorScheme';
+
+interface AdminStats {
+  totalUsers: number;
+  totalTeachers: number;
+  totalStudents: number;
+  totalCourses: number;
+  totalRevenue: number;
+}
 
 export default function AdminProfileScreen() {
   const { user, logout } = useAuth();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const [stats, setStats] = useState<AdminStats>({
+    totalUsers: 0,
+    totalTeachers: 0,
+    totalStudents: 0,
+    totalCourses: 0,
+    totalRevenue: 0,
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const formatRevenue = useCallback((value: number) => {
+    if (!Number.isFinite(value) || value <= 0) {
+      return '$0';
+    }
+
+    if (value >= 1_000_000) {
+      return `$${(value / 1_000_000).toFixed(1)}M`;
+    }
+
+    if (value >= 1_000) {
+      return `$${(value / 1_000).toFixed(1)}K`;
+    }
+
+    return `$${value.toLocaleString()}`;
+  }, []);
+
+  const fetchAdminStats = useCallback(async () => {
+    try {
+      setLoadingStats(true);
+      const token = await AsyncStorage.getItem('token');
+      const response = await fetch(getApiUrl(API_ENDPOINTS.ADMIN_STATS), {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch admin stats: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const statsPayload = data.stats ?? data;
+
+      setStats({
+        totalUsers: statsPayload.totalUsers ?? statsPayload.userCount ?? 0,
+        totalTeachers: statsPayload.totalTeachers ?? statsPayload.teacherCount ?? 0,
+        totalStudents: statsPayload.totalStudents ?? statsPayload.studentCount ?? 0,
+        totalCourses: statsPayload.totalCourses ?? statsPayload.courseCount ?? 0,
+        totalRevenue: statsPayload.totalRevenue ?? statsPayload.revenue ?? 0,
+      });
+    } catch (error) {
+      console.error('Error fetching admin stats:', error);
+      Alert.alert('Error', 'Unable to load admin statistics at the moment.');
+      setStats({
+        totalUsers: 0,
+        totalTeachers: 0,
+        totalStudents: 0,
+        totalCourses: 0,
+        totalRevenue: 0,
+      });
+    } finally {
+      setLoadingStats(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAdminStats();
+  }, [fetchAdminStats]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchAdminStats();
+    setRefreshing(false);
+  }, [fetchAdminStats]);
+
+  const formattedRevenue = useMemo(
+    () => (loadingStats ? '—' : formatRevenue(stats.totalRevenue)),
+    [formatRevenue, loadingStats, stats.totalRevenue]
+  );
 
   const handleLogout = () => {
     Alert.alert(
@@ -77,7 +169,12 @@ export default function AdminProfileScreen() {
   ];
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       {/* Profile Header */}
       <View style={[styles.profileHeader, { backgroundColor: colors.surface }]}>
         <View style={[styles.avatarContainer, { backgroundColor: colors.primary }]}>
@@ -95,17 +192,23 @@ export default function AdminProfileScreen() {
       {/* Admin Stats */}
       <View style={[styles.statsContainer, { backgroundColor: colors.surface }]}>
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.primary }]}>1,250</Text>
+          <Text style={[styles.statNumber, { color: colors.primary }]}>
+            {loadingStats ? '—' : stats.totalUsers.toLocaleString()}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.icon }]}>Total Users</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.primary }]}>89</Text>
+          <Text style={[styles.statNumber, { color: colors.primary }]}>
+            {loadingStats ? '—' : stats.totalCourses.toLocaleString()}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.icon }]}>Total Courses</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={[styles.statNumber, { color: colors.primary }]}>$156K</Text>
+          <Text style={[styles.statNumber, { color: colors.primary }]}>
+            {formattedRevenue}
+          </Text>
           <Text style={[styles.statLabel, { color: colors.icon }]}>Total Revenue</Text>
         </View>
       </View>
@@ -122,7 +225,10 @@ export default function AdminProfileScreen() {
         <View style={styles.infoRow}>
           <Ionicons name="calendar-outline" size={20} color={colors.icon} />
           <Text style={[styles.infoText, { color: colors.text }]}>
-            Admin since: January 2024
+            Admin since:{' '}
+            {user?.createdAt
+              ? new Date(user.createdAt).toLocaleDateString()
+              : 'Not available'}
           </Text>
         </View>
         <View style={styles.infoRow}>
@@ -134,7 +240,22 @@ export default function AdminProfileScreen() {
         <View style={styles.infoRow}>
           <Ionicons name="time-outline" size={20} color={colors.icon} />
           <Text style={[styles.infoText, { color: colors.text }]}>
-            Last login: Today at 2:30 PM
+            Last login:{' '}
+            {user?.lastLogin
+              ? new Date(user.lastLogin).toLocaleString()
+              : 'Not available'}
+          </Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Ionicons name="people-outline" size={20} color={colors.icon} />
+          <Text style={[styles.infoText, { color: colors.text }]}>
+            Teachers: {loadingStats ? '—' : stats.totalTeachers.toLocaleString()}
+          </Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Ionicons name="school-outline" size={20} color={colors.icon} />
+          <Text style={[styles.infoText, { color: colors.text }]}>
+            Students: {loadingStats ? '—' : stats.totalStudents.toLocaleString()}
           </Text>
         </View>
       </View>
@@ -145,7 +266,7 @@ export default function AdminProfileScreen() {
         <View style={styles.actionGrid}>
           <TouchableOpacity 
             style={[styles.actionCard, { backgroundColor: colors.primary }]}
-            onPress={() => Alert.alert('Info', 'User management coming soon!')}
+            onPress={() =>{router.push('/(admin)/users')}}
           >
             <Ionicons name="people-outline" size={24} color="white" />
             <Text style={styles.actionTitle}>Manage Users</Text>

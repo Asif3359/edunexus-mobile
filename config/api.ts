@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 // API Configuration for different environments
 const API_CONFIG = {
   // For Android Emulator
@@ -17,13 +19,17 @@ export const getApiBaseUrl = () => {
     return envUrl;
   }
 
-  if (__DEV__ === false) {
-    return envUrl;
+  if (__DEV__) {
+    if (Platform.OS === 'android') {
+      return API_CONFIG.ANDROID_EMULATOR;
+    }
+    if (Platform.OS === 'ios') {
+      return API_CONFIG.IOS_SIMULATOR;
+    }
+    return API_CONFIG.PHYSICAL_DEVICE;
   }
 
-  // For development, you can add platform detection logic here
-  // For now, we'll use Android emulator as default
-  return envUrl;
+  return API_CONFIG.PRODUCTION;
 };
 
 export const API_ENDPOINTS = {
@@ -43,6 +49,7 @@ export const API_ENDPOINTS = {
   TEACHER_REVIEWS: (teacherId: string) => `/api/teachers/${teacherId}/reviews`,
   TEACHER_REVIEW: (teacherId: string, reviewId?: string) =>
     `/api/teachers/${teacherId}/reviews${reviewId ? `/${reviewId}` : ''}`,
+  ADMIN_STATS: '/api/admin/stats',
 } as const;
 
 export const getApiUrl = (endpoint: string) => {
