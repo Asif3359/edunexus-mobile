@@ -14,16 +14,16 @@ const API_CONFIG = {
 export const getApiBaseUrl = () => {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl && envUrl.length > 0) {
-    return API_CONFIG.PRODUCTION;
+    return envUrl;
   }
 
   if (__DEV__ === false) {
-    return API_CONFIG.PRODUCTION;
+    return envUrl;
   }
 
   // For development, you can add platform detection logic here
   // For now, we'll use Android emulator as default
-  return API_CONFIG.PRODUCTION;
+  return envUrl;
 };
 
 export const API_ENDPOINTS = {
